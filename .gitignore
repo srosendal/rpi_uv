@@ -1,0 +1,32 @@
+# Logs
+*.log
+logs/
+logfile
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+*.egg-info/
+.Python
+
+# Photos and captures
+photos/
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test images (optional - uncomment if you don't want to upload test images)
+# static/test_images/
