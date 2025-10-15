@@ -168,6 +168,14 @@ main() {
     print_success "==============================================="
     print_success "  Installation Complete!"
     print_success "==============================================="
+    
+    # Clean up any existing server on port 5000
+    if command -v lsof &> /dev/null && lsof -ti:5000 > /dev/null 2>&1; then
+        print_info "Cleaning up existing server on port 5000..."
+        lsof -ti:5000 | xargs kill -9 2>/dev/null
+        sleep 2
+    fi
+    
     print_info "Starting kiosk mode in 3 seconds..."
     sleep 3
     
