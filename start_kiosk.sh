@@ -4,11 +4,22 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Kill any existing server on port 5000
+echo "Checking for existing server on port 5000..."
+if lsof -ti:5000 > /dev/null 2>&1; then
+    echo "Found existing server, stopping it..."
+    lsof -ti:5000 | xargs kill -9 2>/dev/null
+    sleep 2
+fi
+
 # Start the server in background
 echo "Starting server..."
 cd "$SCRIPT_DIR"
 bash start_server.sh &
 SERVER_PID=$!
+
+# Set up cleanup trap to kill server when script exits
+trap "echo 'Stopping server...'; kill $SERVER_PID 2>/dev/null" EXIT
 
 # Wait for server to be ready (check if port 5000 is responding)
 echo "Waiting for server to be ready..."
