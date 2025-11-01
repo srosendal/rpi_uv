@@ -69,7 +69,9 @@ def stream_capture(output_path, timeout_ms=500):
             '--height', str(STREAM_HEIGHT),
             '--timeout', str(timeout_ms),
             '--nopreview',
-            '-n'
+            '-n',
+            '--rotation', '0',     # Force no rotation
+            '--exif', 'none'       # Strip EXIF data to prevent orientation issues
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
