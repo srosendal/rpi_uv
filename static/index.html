@@ -24,7 +24,8 @@
                 <!-- Live View Section -->
                 <div id="camera-section">
                 <div id="camera-container">
-                    <canvas id="camera-canvas" width="406" height="304"></canvas>
+                    <img id="mjpeg-stream" width="406" height="304" style="display: block; position: absolute; top: 0; left: 0;">
+                    <canvas id="camera-canvas" width="406" height="304" style="display: none;"></canvas>
                     <svg id="roi-overlay" width="406" height="304">
                         <!-- ROI rectangles will be drawn here -->
                         <rect id="roi-1" class="roi-rect" x="117" y="89" width="141" height="19" />
