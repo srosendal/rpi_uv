@@ -20,10 +20,16 @@ app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
 # Configuration
-STREAM_WIDTH = 432
-STREAM_HEIGHT = 324
+STREAM_WIDTH = 406
+STREAM_HEIGHT = 304
+CAPTURE_WIDTH = 4056  # Native camera resolution
+CAPTURE_HEIGHT = 3040
 PHOTOS_DIR = Path('photos')
 CAPTURE_DIR = Path('/tmp/captures')
+
+# Coordinate scaling factors for ROI mapping
+SCALE_FACTOR_X = CAPTURE_WIDTH / STREAM_WIDTH   # ~9.99
+SCALE_FACTOR_Y = CAPTURE_HEIGHT / STREAM_HEIGHT  # 10.0
 
 # Create directories
 PHOTOS_DIR.mkdir(exist_ok=True)
@@ -272,6 +278,29 @@ def capture_sequence():
         logger.info("Resuming stream")
 
 
+def scale_rois_to_capture_resolution(streaming_rois):
+    """
+    Scale ROI coordinates from streaming resolution to capture resolution
+    
+    Args:
+        streaming_rois: List of ROI dicts with x, y, width, height in streaming coordinates
+    
+    Returns:
+        List of ROI dicts scaled to capture resolution
+    """
+    scaled_rois = []
+    for roi in streaming_rois:
+        scaled_roi = {
+            'x': int(roi['x'] * SCALE_FACTOR_X),
+            'y': int(roi['y'] * SCALE_FACTOR_Y),
+            'width': int(roi['width'] * SCALE_FACTOR_X),
+            'height': int(roi['height'] * SCALE_FACTOR_Y)
+        }
+        scaled_rois.append(scaled_roi)
+        logger.debug(f"Scaled ROI: {roi} -> {scaled_roi}")
+    return scaled_rois
+
+
 @app.route('/api/analyze-sequence', methods=['POST'])
 def analyze_sequence():
     """Analyze a sequence of captured photos"""
@@ -282,7 +311,7 @@ def analyze_sequence():
     
     folder = data['folder']
     photos = data['photos']
-    rois = data['rois']
+    streaming_rois = data['rois']  # ROIs in streaming coordinates
     folder_path = PHOTOS_DIR / folder
     
     if not folder_path.exists():
@@ -290,6 +319,10 @@ def analyze_sequence():
     
     try:
         logger.info(f"Analyzing {len(photos)} photos in: {folder}")
+        
+        # Scale ROIs from streaming resolution to capture resolution
+        capture_rois = scale_rois_to_capture_resolution(streaming_rois)
+        logger.info(f"Scaled {len(streaming_rois)} ROIs to capture resolution")
         
         analyzer = HSVAnalyzer()
         all_results = []
@@ -302,12 +335,12 @@ def analyze_sequence():
                 return jsonify({'success': False, 'error': f'Photo not found: {photo_name}'}), 404
             
             logger.info(f"Analyzing photo {i}/{len(photos)}: {photo_name}")
-            results = analyzer.analyze_image(photo_path, rois)
+            results = analyzer.analyze_image(photo_path, capture_rois)
             all_results.append(results)
             logger.info(f"Results: {results}")
         
         # Average the results
-        num_rois = len(rois)
+        num_rois = len(streaming_rois)
         averaged_results = []
         
         for roi_idx in range(num_rois):
