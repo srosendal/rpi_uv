@@ -300,7 +300,7 @@ def get_frame():
 @app.route('/api/capture-sequence', methods=['POST'])
 def capture_sequence():
     """
-    Capture 3 photos in sequence with delays
+    Capture 3 photos in sequence with delays (legacy endpoint)
     """
     global streaming_active, capture_in_progress
     
@@ -382,6 +382,94 @@ def capture_sequence():
         time.sleep(0.5)
         streaming_active = True
         logger.info("Resuming stream")
+
+
+@app.route('/api/capture-sequence-stream')
+def capture_sequence_stream():
+    """
+    Capture 3 photos in sequence with real-time progress updates via SSE
+    """
+    def generate():
+        global streaming_active, capture_in_progress
+        
+        if capture_in_progress:
+            yield f'data: {json.dumps({"status": "error", "message": "Capture already in progress"})}\n\n'
+            return
+        
+        # Stop streaming
+        streaming_active = False
+        capture_in_progress = True
+        
+        try:
+            yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\n\n'
+            logger.info("=== Starting capture sequence (SSE) ===")
+            
+            yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\n\n'
+            
+            # Wait for streaming to fully stop
+            time.sleep(1.0)
+            
+            # Kill any leftover camera processes
+            try:
+                subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
+                time.sleep(3.5)  # Critical: wait for memory to be freed
+                subprocess.run(['pkill', '-9', 'rpicam-still'], capture_output=True)
+                time.sleep(0.5)
+            except:
+                pass
+            
+            logger.info("Camera should be free now")
+            
+            # Create timestamped folder
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            folder_path = PHOTOS_DIR / timestamp
+            folder_path.mkdir(exist_ok=True)
+            logger.info(f"Created folder: {folder_path}")
+            
+            photos = []
+            
+            # Capture 3 photos with progress updates
+            for i in range(1, 4):
+                yield f'data: {json.dumps({"status": "capturing", "photo": i, "total": 3, "message": f"Capturing photo {i}/3..."})}\n\n'
+                logger.info(f"Capturing photo {i}/3")
+                
+                photo_name = f"{timestamp}_{i:03d}.jpg"
+                photo_path = folder_path / photo_name
+                
+                # High quality capture at native resolution
+                if not analysis_capture(photo_path, timeout_ms=2000):
+                    logger.error(f"Failed to capture photo {i}/3")
+                    yield f'data: {json.dumps({"status": "error", "message": f"Failed to capture photo {i}/3"})}\n\n'
+                    capture_in_progress = False
+                    streaming_active = True
+                    return
+                
+                photos.append(photo_name)
+                logger.info(f"Captured: {photo_name}")
+                
+                # Send success with image URL
+                yield f'data: {json.dumps({"status": "captured", "photo": i, "total": 3, "filename": photo_name, "folder": timestamp, "message": f"Captured photo {i}/3"})}\n\n'
+                
+                # Delay before next capture (except after last)
+                if i < 3:
+                    time.sleep(2.0)
+            
+            logger.info(f"=== Capture sequence complete: {len(photos)} photos ===")
+            
+            # Send completion event
+            yield f'data: {json.dumps({"status": "complete", "folder": timestamp, "photos": photos, "message": "All photos captured successfully"})}\n\n'
+            
+        except Exception as e:
+            logger.error(f"Capture sequence error: {e}", exc_info=True)
+            yield f'data: {json.dumps({"status": "error", "message": f"Capture failed: {str(e)}"})}\n\n'
+        finally:
+            # Always reset flags
+            capture_in_progress = False
+            time.sleep(0.5)
+            streaming_active = True
+            logger.info("Resuming stream")
+    
+    return Response(generate(), mimetype='text/event-stream')
 
 
 def scale_rois_to_capture_resolution(streaming_rois):
