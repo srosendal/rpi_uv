@@ -150,10 +150,10 @@ class App {
         fetch(`${this.apiBaseUrl}/api/stream/start`, { method: 'POST' })
             .catch(err => console.error('Failed to start stream:', err));
         
-        // Request frames every 500ms (matches backend capture timeout for efficient streaming)
+        // Request frames every 200ms for 4-5 fps streaming
         this.streamingInterval = setInterval(() => {
             this.updateStreamingImage();
-        }, 500);
+        }, 200);
     }
 
     stopStreaming() {
@@ -175,7 +175,7 @@ class App {
             if (data.success && data.image) {
                 const img = new Image();
                 img.onload = () => {
-                    this.ctx.drawImage(img, 0, 0, 432, 324);
+                    this.ctx.drawImage(img, 0, 0, 406, 304);
                 };
                 img.src = data.image;
             }
