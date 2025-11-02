@@ -345,7 +345,7 @@ def capture_sequence():
             photo_path = folder_path / photo_name
             
             # High quality capture at native resolution
-            if not analysis_capture(photo_path, timeout_ms=2000):
+            if not analysis_capture(photo_path, timeout_ms=4000):
                 logger.error(f"Failed to capture photo {i}/3")
                 capture_in_progress = False
                 streaming_active = True
