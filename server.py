@@ -60,6 +60,7 @@ logger = logging.getLogger('RPiAnalyzer')
 # Simple global state
 streaming_active = False
 capture_in_progress = False
+mjpeg_process = None
 
 
 def stream_capture(output_path, timeout_ms=500):
@@ -155,16 +156,119 @@ def start_stream():
 
 @app.route('/api/stream/stop', methods=['POST'])
 def stop_stream():
-    global streaming_active
+    global streaming_active, mjpeg_process
     streaming_active = False
+    
+    # Kill MJPEG process if running
+    if mjpeg_process:
+        try:
+            mjpeg_process.terminate()
+            mjpeg_process.wait(timeout=2)
+        except:
+            try:
+                mjpeg_process.kill()
+            except:
+                pass
+        mjpeg_process = None
+    
+    # Also kill any stray rpicam-vid processes
+    try:
+        subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
+    except:
+        pass
+    
     logger.info("Streaming stopped")
     time.sleep(0.2)  # Brief pause
     return jsonify({'status': 'stopped'})
 
 
+def generate_mjpeg_stream():
+    """
+    Generator function for MJPEG streaming using rpicam-vid
+    Yields JPEG frames continuously
+    """
+    global mjpeg_process, streaming_active
+    
+    try:
+        # Start rpicam-vid process for continuous JPEG streaming
+        cmd = [
+            'rpicam-vid',
+            '--width', str(STREAM_WIDTH),
+            '--height', str(STREAM_HEIGHT),
+            '--timeout', '0',  # Run indefinitely
+            '--nopreview',
+            '--codec', 'mjpeg',
+            '--inline',
+            '--flush',
+            '--framerate', '15',  # Limit framerate to reduce memory usage
+            '--rotation', '0',
+            '-o', '-'  # Output to stdout
+        ]
+        
+        mjpeg_process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=10**8
+        )
+        
+        logger.info("MJPEG stream started with rpicam-vid")
+        
+        # Read and yield JPEG frames
+        while streaming_active and mjpeg_process and mjpeg_process.poll() is None:
+            # Read frame header (look for JPEG start marker)
+            chunk = mjpeg_process.stdout.read(2)
+            if not chunk or len(chunk) != 2:
+                break
+            
+            # Check for JPEG start marker (0xFF 0xD8)
+            if chunk[0] == 0xFF and chunk[1] == 0xD8:
+                frame_data = chunk
+                
+                # Read until JPEG end marker (0xFF 0xD9)
+                while True:
+                    byte = mjpeg_process.stdout.read(1)
+                    if not byte:
+                        break
+                    frame_data += byte
+                    
+                    # Check for JPEG end marker
+                    if len(frame_data) >= 2 and frame_data[-2] == 0xFF and frame_data[-1] == 0xD9:
+                        # Yield complete JPEG frame
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n')
+                        break
+            
+            # Don't stream during capture
+            if capture_in_progress:
+                time.sleep(0.1)
+                
+    except Exception as e:
+        logger.error(f"MJPEG stream error: {e}")
+    finally:
+        if mjpeg_process:
+            mjpeg_process.terminate()
+            mjpeg_process.wait()
+            mjpeg_process = None
+
+
+@app.route('/stream')
+def video_stream():
+    """MJPEG video stream endpoint"""
+    global streaming_active
+    
+    if not streaming_active:
+        return "Stream not active", 503
+    
+    return Response(
+        generate_mjpeg_stream(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+
 @app.route('/api/stream/frame', methods=['GET'])
 def get_frame():
-    """Get a single frame for streaming"""
+    """Legacy endpoint - kept for compatibility but deprecated"""
     global streaming_active, capture_in_progress
     
     # Don't stream during capture
@@ -211,11 +315,13 @@ def capture_sequence():
         logger.info("=== Starting capture sequence ===")
         logger.info("Stopping stream and waiting for camera...")
         
-        # Wait longer for all streaming processes to finish
-        time.sleep(2.0)
+        # Wait for streaming to fully stop
+        time.sleep(1.0)
         
-        # Kill any leftover rpicam-still processes to ensure camera is free
+        # Kill any leftover camera processes to ensure camera is free
         try:
+            subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
+            time.sleep(2.0)  # Critical: wait for memory to be freed
             subprocess.run(['pkill', '-9', 'rpicam-still'], capture_output=True)
             time.sleep(0.5)
         except:
@@ -432,6 +538,26 @@ def usb_status():
         'drives': drives,
         'count': len(drives)
     })
+
+
+@app.route('/api/get-image/<folder>/<filename>', methods=['GET'])
+def get_image(folder, filename):
+    """Serve a captured image from the photos directory"""
+    try:
+        folder_path = PHOTOS_DIR / folder
+        if not folder_path.exists():
+            return jsonify({'error': 'Folder not found'}), 404
+        
+        image_path = folder_path / filename
+        if not image_path.exists():
+            return jsonify({'error': 'Image not found'}), 404
+        
+        # Serve the image file
+        return send_from_directory(folder_path, filename, mimetype='image/jpeg')
+    
+    except Exception as e:
+        logger.error(f"Error serving image: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/system/info', methods=['GET'])
