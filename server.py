@@ -321,7 +321,7 @@ def capture_sequence():
         # Kill any leftover camera processes to ensure camera is free
         try:
             subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
-            time.sleep(2.0)  # Critical: wait for memory to be freed
+            time.sleep(3.5)  # Critical: wait for memory to be freed
             subprocess.run(['pkill', '-9', 'rpicam-still'], capture_output=True)
             time.sleep(0.5)
         except:
