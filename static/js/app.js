@@ -185,6 +185,58 @@ class App {
         this.ctx.drawImage(this.mjpegStream, 0, 0, this.canvas.width, this.canvas.height);
     }
 
+    async handleCaptureWithProgress() {
+        return new Promise((resolve, reject) => {
+            const eventSource = new EventSource(`${this.apiBaseUrl}/api/capture-sequence-stream`);
+            
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('SSE event:', data);
+                    
+                    // Update status message
+                    this.updateStatus(data.message, 'processing');
+                    
+                    // Handle different event types
+                    if (data.status === 'captured' && data.folder && data.filename) {
+                        // Display the captured image as thumbnail
+                        this.displayCapturedImage(data.folder, data.filename);
+                        
+                        // Store for later use
+                        if (!this.lastCapturedFolder) {
+                            this.lastCapturedFolder = data.folder;
+                            this.lastCapturedPhotos = [];
+                        }
+                        this.lastCapturedPhotos.push(data.filename);
+                    }
+                    
+                    if (data.status === 'complete') {
+                        // Capture complete
+                        this.lastCapturedFolder = data.folder;
+                        this.lastCapturedPhotos = data.photos;
+                        eventSource.close();
+                        resolve(data);
+                    }
+                    
+                    if (data.status === 'error') {
+                        eventSource.close();
+                        reject(new Error(data.message));
+                    }
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                    eventSource.close();
+                    reject(error);
+                }
+            };
+            
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                eventSource.close();
+                reject(new Error('Connection to server lost'));
+            };
+        });
+    }
+
     async handleCapture() {
         if (this.isCapturing) return;
         
@@ -198,31 +250,8 @@ class App {
         this.updateStatus('Starting capture sequence...', 'processing');
         
         try {
-            // NEW WORKFLOW: Capture 3 photos first, then analyze
-            
-            // Step 1: Capture 3 photos in sequence
-            this.updateStatus('Capturing 3 photos...', 'processing');
-            
-            const captureResponse = await fetch(`${this.apiBaseUrl}/api/capture-sequence`, {
-                method: 'POST'
-            });
-            
-            if (!captureResponse.ok) {
-                const errorData = await captureResponse.json();
-                throw new Error(errorData.error || 'Capture sequence failed');
-            }
-            
-            const captureData = await captureResponse.json();
-            
-            if (!captureData.success) {
-                throw new Error(captureData.error || 'Capture sequence failed');
-            }
-            
-            // Store folder info for USB saving
-            this.lastCapturedFolder = captureData.folder;
-            this.lastCapturedPhotos = captureData.photos;
-            
-            console.log(`Captured ${captureData.photos.length} photos to folder: ${captureData.folder}`);
+            // Use Server-Sent Events for real-time progress
+            await this.handleCaptureWithProgress();
             
             // Step 2: Analyze the captured photos
             this.updateStatus('Analyzing photos...', 'processing');
@@ -236,8 +265,8 @@ class App {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    folder: captureData.folder,
-                    photos: captureData.photos,
+                    folder: this.lastCapturedFolder,
+                    photos: this.lastCapturedPhotos,
                     rois: rois
                 })
             });
