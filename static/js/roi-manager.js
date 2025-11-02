@@ -14,14 +14,15 @@ class ROIManager {
 
     /**
      * Get default ROI positions
+     * Scaled for 406x304 streaming resolution (proportional to 4056x3040 capture)
      * @returns {Array} - Default ROI configurations
      */
     getDefaultROIs() {
         return [
-            { id: 1, x: 125, y: 95, width: 150, height: 20 },
-            { id: 2, x: 125, y: 145, width: 150, height: 20 },
-            { id: 3, x: 125, y: 195, width: 150, height: 20 },
-            { id: 4, x: 125, y: 245, width: 150, height: 20 }
+            { id: 1, x: 117, y: 89, width: 141, height: 19 },
+            { id: 2, x: 117, y: 136, width: 141, height: 19 },
+            { id: 3, x: 117, y: 183, width: 141, height: 19 },
+            { id: 4, x: 117, y: 230, width: 141, height: 19 }
         ];
     }
 
@@ -93,13 +94,13 @@ class ROIManager {
                     roi.y = Math.max(0, roi.y - this.stepSize);
                     break;
                 case 'down':
-                    roi.y = Math.min(300 - roi.height, roi.y + this.stepSize);
+                    roi.y = Math.min(304 - roi.height, roi.y + this.stepSize);
                     break;
                 case 'left':
                     roi.x = Math.max(0, roi.x - this.stepSize);
                     break;
                 case 'right':
-                    roi.x = Math.min(400 - roi.width, roi.x + this.stepSize);
+                    roi.x = Math.min(406 - roi.width, roi.x + this.stepSize);
                     break;
             }
         } else if (this.adjustmentMode === 'increase') {
@@ -113,7 +114,7 @@ class ROIManager {
                     break;
                 case 'down':
                     // Move bottom edge down (expand downward)
-                    roi.height = Math.min(300 - roi.y, roi.height + this.stepSize);
+                    roi.height = Math.min(304 - roi.y, roi.height + this.stepSize);
                     break;
                 case 'left':
                     // Move left edge left (expand leftward)
@@ -123,7 +124,7 @@ class ROIManager {
                     break;
                 case 'right':
                     // Move right edge right (expand rightward)
-                    roi.width = Math.min(400 - roi.x, roi.width + this.stepSize);
+                    roi.width = Math.min(406 - roi.x, roi.width + this.stepSize);
                     break;
             }
         } else if (this.adjustmentMode === 'decrease') {
