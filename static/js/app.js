@@ -20,6 +20,7 @@ class App {
         // DOM elements
         this.canvas = document.getElementById('camera-canvas');
         this.ctx = this.canvas.getContext('2d');
+        this.mjpegStream = document.getElementById('mjpeg-stream');
         this.captureBtn = document.getElementById('capture-btn');
         this.normalModeBtn = document.getElementById('normal-mode-btn');
         this.settingsModeBtn = document.getElementById('settings-mode-btn');
@@ -146,43 +147,42 @@ class App {
     }
 
     startStreaming() {
-        // Start streaming from API
+        // Start MJPEG streaming from API
         fetch(`${this.apiBaseUrl}/api/stream/start`, { method: 'POST' })
+            .then(() => {
+                console.log('MJPEG stream started');
+                // Set the MJPEG stream source with cache-busting timestamp
+                this.mjpegStream.src = `${this.apiBaseUrl}/stream?t=${Date.now()}`;
+                this.mjpegStream.style.display = 'block';
+            })
             .catch(err => console.error('Failed to start stream:', err));
-        
-        // Request frames every 200ms for 4-5 fps streaming
-        this.streamingInterval = setInterval(() => {
-            this.updateStreamingImage();
-        }, 200);
     }
 
-    stopStreaming() {
-        if (this.streamingInterval) {
-            clearInterval(this.streamingInterval);
-            this.streamingInterval = null;
+    stopStreaming(keepVisual = false) {
+        // Optionally capture current frame before stopping
+        if (keepVisual) {
+            this.captureCurrentFrameToCanvas();
         }
         
         // Stop streaming on server
         fetch(`${this.apiBaseUrl}/api/stream/stop`, { method: 'POST' })
+            .then(() => {
+                console.log('MJPEG stream stopped');
+                // Clear the stream source
+                this.mjpegStream.src = '';
+                this.mjpegStream.style.display = 'none';
+                
+                // Show canvas if we want to keep visual
+                if (keepVisual) {
+                    this.canvas.style.display = 'block';
+                }
+            })
             .catch(err => console.error('Failed to stop stream:', err));
     }
 
-    async updateStreamingImage() {
-        try {
-            const response = await fetch(`${this.apiBaseUrl}/api/stream/frame`);
-            const data = await response.json();
-            
-            if (data.success && data.image) {
-                const img = new Image();
-                img.onload = () => {
-                    this.ctx.drawImage(img, 0, 0, 406, 304);
-                };
-                img.src = data.image;
-            }
-        } catch (error) {
-            // Silently fail during streaming - camera may be temporarily busy
-            console.debug('Stream frame error:', error);
-        }
+    captureCurrentFrameToCanvas() {
+        // Draw the current MJPEG frame to canvas
+        this.ctx.drawImage(this.mjpegStream, 0, 0, this.canvas.width, this.canvas.height);
     }
 
     async handleCapture() {
@@ -191,11 +191,8 @@ class App {
         this.isCapturing = true;
         this.captureBtn.disabled = true;
         
-        // Stop streaming requests during capture
-        if (this.streamingInterval) {
-            clearInterval(this.streamingInterval);
-            this.streamingInterval = null;
-        }
+        // Stop MJPEG streaming during capture, but keep visual
+        this.stopStreaming(true);
         
         // Update status
         this.updateStatus('Starting capture sequence...', 'processing');
@@ -276,6 +273,11 @@ class App {
             // Automatically save to USB if available
             await this.saveToUSB(analyzeData.results);
             
+            // Display one of the captured images on canvas
+            if (this.lastCapturedPhotos && this.lastCapturedPhotos.length > 0) {
+                await this.displayCapturedImage(this.lastCapturedFolder, this.lastCapturedPhotos[0]);
+            }
+            
         } catch (error) {
             console.error('Error during capture:', error);
             this.updateStatus(`Error: ${error.message}`, 'error');
@@ -283,8 +285,29 @@ class App {
             this.isCapturing = false;
             this.captureBtn.disabled = false;
             
-            // Restart streaming
+            // Hide canvas and restart streaming
+            this.canvas.style.display = 'none';
             this.startStreaming();
+        }
+    }
+
+    async displayCapturedImage(folder, filename) {
+        try {
+            // Fetch the captured image
+            const response = await fetch(`${this.apiBaseUrl}/api/get-image/${folder}/${filename}`);
+            if (!response.ok) {
+                console.error('Failed to fetch captured image');
+                return;
+            }
+            
+            const blob = await response.blob();
+            const img = await createImageBitmap(blob);
+            
+            // Draw scaled down version to canvas (4056x3040 -> 406x304)
+            this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+            
+        } catch (error) {
+            console.error('Error displaying captured image:', error);
         }
     }
 
