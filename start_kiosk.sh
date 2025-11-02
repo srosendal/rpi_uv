@@ -55,6 +55,7 @@ fi
 echo "Starting kiosk mode with $BROWSER..."
 
 # Start Chromium in kiosk mode
+# Redirect stderr to suppress harmless Chromium warnings
 $BROWSER \
     --kiosk \
     --noerrdialogs \
@@ -67,4 +68,17 @@ $BROWSER \
     --disable-pinch \
     --overscroll-history-navigation=0 \
     --disable-session-crashed-bubble \
-    http://localhost:5000
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-dev-shm-usage \
+    --disable-background-networking \
+    --disable-sync \
+    --metrics-recording-only \
+    --disable-default-apps \
+    --mute-audio \
+    --no-pings \
+    --no-crash-upload \
+    http://localhost:5000 2>&1 | grep -v -E '(disk_cache|cache|EGL|eglCreateContext|GPU|gpu|texStorage2D|ANGLE|google_apis|gcm|registration_request)' &
+
+# Wait for Chromium (it's now in background due to the pipe)
+wait
