@@ -915,6 +915,66 @@ def system_info():
     })
 
 
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown_server():
+    """Safely shutdown the server and clean up resources"""
+    global streaming_active, mjpeg_process
+    
+    logger.info("=== Shutdown requested ===")
+    
+    try:
+        # Stop streaming
+        streaming_active = False
+        
+        # Kill MJPEG process if running
+        if mjpeg_process:
+            try:
+                mjpeg_process.terminate()
+                mjpeg_process.wait(timeout=2)
+            except:
+                try:
+                    mjpeg_process.kill()
+                except:
+                    pass
+            mjpeg_process = None
+        
+        # Kill any camera processes
+        try:
+            subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
+            subprocess.run(['pkill', '-9', 'rpicam-still'], capture_output=True)
+        except:
+            pass
+        
+        # Set PWM duty cycle to 0
+        if GPIO_AVAILABLE:
+            logger.info("Setting PWM duty cycle to 0%")
+            set_pwm_duty_cycle(0)
+        
+        # Cleanup GPIO
+        cleanup_pwm()
+        
+        logger.info("Cleanup complete, shutting down Flask server...")
+        
+        # Shutdown Flask server
+        shutdown = request.environ.get('werkzeug.server.shutdown')
+        if shutdown is None:
+            # Werkzeug 2.1+ doesn't have server.shutdown, use os._exit as fallback
+            import os
+            import threading
+            def delayed_shutdown():
+                time.sleep(1)
+                os._exit(0)
+            threading.Thread(target=delayed_shutdown, daemon=True).start()
+        else:
+            shutdown()
+        
+        return jsonify({'success': True, 'message': 'Server shutting down safely'})
+        
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("RPi Test Strip Analyzer - Server Starting (v1.0.3)")
