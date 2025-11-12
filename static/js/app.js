@@ -151,22 +151,21 @@ class App {
             console.log(`Camera command: ${cameraCommandInput.value}`);
         });
         
-        // Browse location button
-        const browseLocationBtn = document.getElementById('browse-location-btn');
-        const directoryPicker = document.getElementById('directory-picker');
+        // Save location preset selector
+        const saveLocationPreset = document.getElementById('save-location-preset');
         const saveLocationDisplay = document.getElementById('save-location-display');
         
-        browseLocationBtn.addEventListener('click', () => {
-            directoryPicker.click();
-        });
-        
-        directoryPicker.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                // Get the selected directory path
-                const path = e.target.files[0].webkitRelativePath.split('/')[0];
-                saveLocationDisplay.value = path || 'photos';
-                console.log(`Save location set to: ${path}`);
+        saveLocationPreset.addEventListener('change', (e) => {
+            const value = e.target.value;
+            if (value && value !== 'custom') {
+                saveLocationDisplay.value = value;
+                console.log(`Save location set to: ${value}`);
+            } else if (value === 'custom') {
+                // Focus on the text input for custom entry
+                saveLocationDisplay.focus();
             }
+            // Reset dropdown to placeholder
+            saveLocationPreset.value = '';
         });
         
         // Save configuration
