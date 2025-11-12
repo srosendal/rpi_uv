@@ -104,8 +104,19 @@
                     </div>
 
                     <div class="settings-group">
-                        <input type="range" id="led-brightness" min="0" max="255" value="128">
-                        <span id="led-value">128</span>
+                        <label for="num-photos">Number of Photos (1-5):</label>
+                        <input type="number" id="num-photos" min="1" max="5" value="3">
+                    </div>
+
+                    <div class="settings-group">
+                        <label for="pwm-duty-cycle">PWM Duty Cycle (0-100%):</label>
+                        <input type="range" id="pwm-duty-cycle" min="0" max="100" value="60">
+                        <span id="pwm-duty-value">60%</span>
+                    </div>
+
+                    <div class="settings-group">
+                        <label for="camera-command">Camera Command:</label>
+                        <input type="text" id="camera-command" value="rpicam-still" placeholder="e.g., rpicam-still --shutter 5000">
                     </div>
 
                     </div>
