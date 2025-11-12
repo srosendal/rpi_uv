@@ -136,6 +136,15 @@ def init_pwm(duty_cycle=60):
         return False
     
     try:
+        # Disable warnings for channels already in use
+        GPIO.setwarnings(False)
+        
+        # Clean up any existing GPIO setup first
+        try:
+            GPIO.cleanup(PWM_GPIO_PIN)
+        except:
+            pass
+        
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(PWM_GPIO_PIN, GPIO.OUT)
         pwm_instance = GPIO.PWM(PWM_GPIO_PIN, PWM_FREQUENCY)
