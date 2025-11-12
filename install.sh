@@ -69,8 +69,17 @@ echo "Step 7: Creating directories..."
 sudo mkdir -p /tmp/captures
 sudo chmod 777 /tmp/captures
 
+# Add user to plugdev group for USB access
+echo "Step 8: Adding user to plugdev group for USB access..."
+if ! groups $USER | grep -q plugdev; then
+    sudo usermod -a -G plugdev $USER
+    echo "User $USER added to plugdev group (logout/login required for changes to take effect)"
+else
+    echo "User $USER already in plugdev group"
+fi
+
 # Install systemd service
-echo "Step 8: Installing systemd service..."
+echo "Step 9: Installing systemd service..."
 INSTALL_DIR="$(pwd)"
 sudo sed "s|INSTALL_DIR|$INSTALL_DIR|g" rpi-analyzer.service.template > /tmp/rpi-analyzer.service
 sudo mv /tmp/rpi-analyzer.service /etc/systemd/system/rpi-analyzer.service
@@ -78,7 +87,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable rpi-analyzer.service
 
 # Install kiosk mode autostart
-echo "Step 9: Setting up kiosk mode..."
+echo "Step 10: Setting up kiosk mode..."
 mkdir -p ~/.config/autostart
 cat > ~/.config/autostart/rpi-analyzer-kiosk.desktop << EOF
 [Desktop Entry]
