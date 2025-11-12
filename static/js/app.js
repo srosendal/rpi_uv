@@ -131,7 +131,7 @@ class App {
         const startupDelayInput = document.getElementById('startup-delay');
         startupDelayInput.addEventListener('change', (e) => {
             const value = parseFloat(e.target.value);
-            if (value >= 1.5 && value <= 5) {
+            if (value >= 0.5 && value <= 5) {
                 console.log(`Startup delay set to: ${value}s`);
             }
         });
@@ -140,7 +140,7 @@ class App {
         const captureDelayInput = document.getElementById('capture-delay');
         captureDelayInput.addEventListener('change', (e) => {
             const value = parseFloat(e.target.value);
-            if (value >= 1.5 && value <= 5) {
+            if (value >= 0.5 && value <= 5) {
                 console.log(`Capture delay set to: ${value}s`);
             }
         });
@@ -660,9 +660,9 @@ class App {
             this.roiManager.resetToDefault();
             
             // Reset all settings to defaults
-            document.getElementById('num-photos').value = 3;
-            document.getElementById('startup-delay').value = 3.5;
-            document.getElementById('capture-delay').value = 2.0;
+            document.getElementById('num-photos').value = 2;
+            document.getElementById('startup-delay').value = 1.0;
+            document.getElementById('capture-delay').value = 1.0;
             document.getElementById('save-location-display').value = 'photos';
             document.getElementById('pwm-duty-cycle').value = 60;
             document.getElementById('pwm-duty-value').textContent = '60%';
