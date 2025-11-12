@@ -127,10 +127,46 @@ class App {
             await this.setPWMDutyCycle(value);
         });
         
+        // Startup delay input
+        const startupDelayInput = document.getElementById('startup-delay');
+        startupDelayInput.addEventListener('change', (e) => {
+            const value = parseFloat(e.target.value);
+            if (value >= 1.5 && value <= 5) {
+                console.log(`Startup delay set to: ${value}s`);
+            }
+        });
+        
+        // Capture delay input
+        const captureDelayInput = document.getElementById('capture-delay');
+        captureDelayInput.addEventListener('change', (e) => {
+            const value = parseFloat(e.target.value);
+            if (value >= 1.5 && value <= 5) {
+                console.log(`Capture delay set to: ${value}s`);
+            }
+        });
+        
         // Camera command input
         const cameraCommandInput = document.getElementById('camera-command');
         cameraCommandInput.addEventListener('blur', () => {
             console.log(`Camera command: ${cameraCommandInput.value}`);
+        });
+        
+        // Browse location button
+        const browseLocationBtn = document.getElementById('browse-location-btn');
+        const directoryPicker = document.getElementById('directory-picker');
+        const saveLocationDisplay = document.getElementById('save-location-display');
+        
+        browseLocationBtn.addEventListener('click', () => {
+            directoryPicker.click();
+        });
+        
+        directoryPicker.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                // Get the selected directory path
+                const path = e.target.files[0].webkitRelativePath.split('/')[0];
+                saveLocationDisplay.value = path || 'photos';
+                console.log(`Save location set to: ${path}`);
+            }
         });
         
         // Save configuration
@@ -535,11 +571,17 @@ class App {
                 
                 // Update settings inputs
                 const numPhotosInput = document.getElementById('num-photos');
+                const startupDelayInput = document.getElementById('startup-delay');
+                const captureDelayInput = document.getElementById('capture-delay');
+                const saveLocationDisplay = document.getElementById('save-location-display');
                 const pwmSlider = document.getElementById('pwm-duty-cycle');
                 const pwmValue = document.getElementById('pwm-duty-value');
                 const cameraCommandInput = document.getElementById('camera-command');
                 
                 if (numPhotosInput) numPhotosInput.value = data.config.num_photos || 3;
+                if (startupDelayInput) startupDelayInput.value = data.config.startup_delay || 3.5;
+                if (captureDelayInput) captureDelayInput.value = data.config.capture_delay || 2.0;
+                if (saveLocationDisplay) saveLocationDisplay.value = data.config.save_location || 'photos';
                 if (pwmSlider) pwmSlider.value = data.config.pwm_duty_cycle || 60;
                 if (pwmValue) pwmValue.textContent = `${data.config.pwm_duty_cycle || 60}%`;
                 if (cameraCommandInput) cameraCommandInput.value = data.config.camera_command || 'rpicam-still';
@@ -556,6 +598,9 @@ class App {
             // Gather all settings
             const config = {
                 num_photos: parseInt(document.getElementById('num-photos').value),
+                startup_delay: parseFloat(document.getElementById('startup-delay').value),
+                capture_delay: parseFloat(document.getElementById('capture-delay').value),
+                save_location: document.getElementById('save-location-display').value,
                 pwm_duty_cycle: parseInt(document.getElementById('pwm-duty-cycle').value),
                 camera_command: document.getElementById('camera-command').value,
                 rois: this.roiManager.getROIs()
@@ -617,6 +662,9 @@ class App {
             
             // Reset all settings to defaults
             document.getElementById('num-photos').value = 3;
+            document.getElementById('startup-delay').value = 3.5;
+            document.getElementById('capture-delay').value = 2.0;
+            document.getElementById('save-location-display').value = 'photos';
             document.getElementById('pwm-duty-cycle').value = 60;
             document.getElementById('pwm-duty-value').textContent = '60%';
             document.getElementById('camera-command').value = 'rpicam-still';
