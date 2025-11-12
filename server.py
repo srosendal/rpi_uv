@@ -83,6 +83,9 @@ def load_config():
     """Load configuration from config.json"""
     default_config = {
         "num_photos": 3,
+        "startup_delay": 3.5,
+        "capture_delay": 2.0,
+        "save_location": "photos",
         "pwm_duty_cycle": 60,
         "camera_command": "rpicam-still",
         "rois": [
@@ -526,14 +529,17 @@ def capture_sequence_stream():
         capture_in_progress = True
         
         try:
-            # Get number of photos from config
+            # Get number of photos, delays, and save location from config
             num_photos = app_config.get('num_photos', 3)
+            startup_delay = app_config.get('startup_delay', 3.5)
+            capture_delay = app_config.get('capture_delay', 2.0)
+            save_location = app_config.get('save_location', 'photos')
             camera_command = app_config.get('camera_command', 'rpicam-still')
             
-            yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\n\n'
+            yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\\n\\n'
             logger.info(f"=== Starting capture sequence ({num_photos} photos) ===")
             
-            yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\n\n'
+            yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\\n\\n'
             
             # Wait for streaming to fully stop
             time.sleep(1.0)
@@ -541,7 +547,7 @@ def capture_sequence_stream():
             # Kill any leftover camera processes
             try:
                 subprocess.run(['pkill', '-9', 'rpicam-vid'], capture_output=True)
-                time.sleep(3.5)  # Critical: wait for memory to be freed
+                time.sleep(startup_delay)  # Configurable startup delay
                 subprocess.run(['pkill', '-9', 'rpicam-still'], capture_output=True)
                 time.sleep(0.5)
             except:
@@ -549,10 +555,11 @@ def capture_sequence_stream():
             
             logger.info("Camera should be free now")
             
-            # Create timestamped folder
+            # Create timestamped folder in configured save location
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            folder_path = PHOTOS_DIR / timestamp
-            folder_path.mkdir(exist_ok=True)
+            base_path = Path(save_location)
+            folder_path = base_path / timestamp
+            folder_path.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created folder: {folder_path}")
             
             photos = []
@@ -581,7 +588,7 @@ def capture_sequence_stream():
                 
                 # Delay before next capture (except after last)
                 if i < num_photos:
-                    time.sleep(2.0)
+                    time.sleep(capture_delay)
             
             logger.info(f"=== Capture sequence complete: {len(photos)} photos ===")
             
@@ -799,7 +806,7 @@ def update_config():
     try:
         # Update config
         for key, value in data.items():
-            if key in ['num_photos', 'pwm_duty_cycle', 'camera_command', 'rois']:
+            if key in ['num_photos', 'startup_delay', 'capture_delay', 'save_location', 'pwm_duty_cycle', 'camera_command', 'rois']:
                 app_config[key] = value
         
         # Save to file
