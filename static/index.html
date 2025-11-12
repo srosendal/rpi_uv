@@ -106,6 +106,21 @@
                     <div class="settings-group">
                         <label for="num-photos">Number of Photos (1-5):</label>
                         <input type="number" id="num-photos" min="1" max="5" value="3">
+                        
+                        <label for="startup-delay">Startup Delay (1.5-5s):</label>
+                        <input type="number" id="startup-delay" min="1.5" max="5" step="0.5" value="3.5">
+                        
+                        <label for="capture-delay">Delay Between Captures (1.5-5s):</label>
+                        <input type="number" id="capture-delay" min="1.5" max="5" step="0.5" value="2.0">
+                    </div>
+
+                    <div class="settings-group">
+                        <label for="save-location">Save Location:</label>
+                        <div class="save-location-control">
+                            <input type="text" id="save-location-display" readonly value="photos">
+                            <button id="browse-location-btn" class="action-btn">Browse...</button>
+                        </div>
+                        <input type="file" id="directory-picker" webkitdirectory directory style="display: none;">
                     </div>
 
                     <div class="settings-group">
