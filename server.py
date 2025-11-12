@@ -536,10 +536,10 @@ def capture_sequence_stream():
             save_location = app_config.get('save_location', 'photos')
             camera_command = app_config.get('camera_command', 'rpicam-still')
             
-            yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\\n\\n'
+            yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\n\n'
             logger.info(f"=== Starting capture sequence ({num_photos} photos) ===")
             
-            yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\\n\\n'
+            yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\n\n'
             
             # Wait for streaming to fully stop
             time.sleep(1.0)
