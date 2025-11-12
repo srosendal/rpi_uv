@@ -1,0 +1,11 @@
+{
+  "num_photos": 3,
+  "pwm_duty_cycle": 60,
+  "camera_command": "rpicam-still",
+  "rois": [
+    { "id": 1, "x": 117, "y": 89, "width": 141, "height": 19 },
+    { "id": 2, "x": 117, "y": 136, "width": 141, "height": 19 },
+    { "id": 3, "x": 117, "y": 183, "width": 141, "height": 19 },
+    { "id": 4, "x": 117, "y": 230, "width": 141, "height": 19 }
+  ]
+}
