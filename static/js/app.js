@@ -34,8 +34,8 @@ class App {
     }
 
     async init() {
-        // Try to load saved configuration
-        this.roiManager.loadFromLocalStorage();
+        // Load configuration from backend
+        await this.loadConfiguration();
         
         // Set up event listeners
         this.setupEventListeners();
@@ -48,7 +48,7 @@ class App {
         
         // Update UI
         this.roiManager.updateAllROIVisuals();
-        this.updateLEDBrightnessDisplay();
+        this.updateSettingsDisplay();
     }
 
     async checkSystemStatus() {
@@ -102,13 +102,35 @@ class App {
             });
         });
         
-        // LED brightness slider
-        const ledBrightness = document.getElementById('led-brightness');
-        const ledValue = document.getElementById('led-value');
-        ledBrightness.addEventListener('input', (e) => {
+        // Number of photos input
+        const numPhotosInput = document.getElementById('num-photos');
+        numPhotosInput.addEventListener('change', (e) => {
             const value = parseInt(e.target.value);
-            this.roiManager.setLEDBrightness(value);
-            ledValue.textContent = value;
+            if (value >= 1 && value <= 5) {
+                console.log(`Number of photos set to: ${value}`);
+            }
+        });
+        
+        // PWM duty cycle slider
+        const pwmSlider = document.getElementById('pwm-duty-cycle');
+        const pwmValue = document.getElementById('pwm-duty-value');
+        
+        // Update display while sliding
+        pwmSlider.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            pwmValue.textContent = `${value}%`;
+        });
+        
+        // Apply PWM when slider is released
+        pwmSlider.addEventListener('change', async (e) => {
+            const value = parseInt(e.target.value);
+            await this.setPWMDutyCycle(value);
+        });
+        
+        // Camera command input
+        const cameraCommandInput = document.getElementById('camera-command');
+        cameraCommandInput.addEventListener('blur', () => {
+            console.log(`Camera command: ${cameraCommandInput.value}`);
         });
         
         // Save configuration
@@ -500,28 +522,108 @@ class App {
         });
     }
 
-    saveConfiguration() {
+    async loadConfiguration() {
         try {
-            // Save to localStorage
-            this.roiManager.saveToLocalStorage();
+            const response = await fetch(`${this.apiBaseUrl}/api/config`);
+            const data = await response.json();
             
-            // Also export as downloadable file
-            this.roiManager.exportConfiguration();
-            
-            this.updateStatus('Configuration saved!', 'success');
-            setTimeout(() => {
-                this.updateStatus('', '');
-            }, 3000);
+            if (data.success && data.config) {
+                // Load ROIs
+                if (data.config.rois) {
+                    this.roiManager.loadConfiguration({ rois: data.config.rois });
+                }
+                
+                // Update settings inputs
+                const numPhotosInput = document.getElementById('num-photos');
+                const pwmSlider = document.getElementById('pwm-duty-cycle');
+                const pwmValue = document.getElementById('pwm-duty-value');
+                const cameraCommandInput = document.getElementById('camera-command');
+                
+                if (numPhotosInput) numPhotosInput.value = data.config.num_photos || 3;
+                if (pwmSlider) pwmSlider.value = data.config.pwm_duty_cycle || 60;
+                if (pwmValue) pwmValue.textContent = `${data.config.pwm_duty_cycle || 60}%`;
+                if (cameraCommandInput) cameraCommandInput.value = data.config.camera_command || 'rpicam-still';
+                
+                console.log('Configuration loaded from backend:', data.config);
+            }
         } catch (error) {
-            console.error('Error saving configuration:', error);
-            alert('Error saving configuration');
+            console.error('Error loading configuration:', error);
         }
     }
 
-    resetConfiguration() {
+    async saveConfiguration() {
+        try {
+            // Gather all settings
+            const config = {
+                num_photos: parseInt(document.getElementById('num-photos').value),
+                pwm_duty_cycle: parseInt(document.getElementById('pwm-duty-cycle').value),
+                camera_command: document.getElementById('camera-command').value,
+                rois: this.roiManager.getROIs()
+            };
+            
+            // Save to backend
+            const response = await fetch(`${this.apiBaseUrl}/api/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Also save to localStorage as backup
+                this.roiManager.saveToLocalStorage();
+                
+                this.updateStatus('Configuration saved!', 'success');
+                setTimeout(() => {
+                    this.updateStatus('', '');
+                }, 3000);
+            } else {
+                throw new Error(data.error || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            this.updateStatus(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    async setPWMDutyCycle(dutyCycle) {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/pwm/set`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ duty_cycle: dutyCycle })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log(`PWM duty cycle set to ${dutyCycle}%`);
+            } else {
+                console.error('Failed to set PWM:', data.error);
+            }
+        } catch (error) {
+            console.error('Error setting PWM duty cycle:', error);
+        }
+    }
+
+    async resetConfiguration() {
         if (confirm('Reset to default configuration?')) {
             this.roiManager.resetToDefault();
-            this.updateLEDBrightnessDisplay();
+            
+            // Reset all settings to defaults
+            document.getElementById('num-photos').value = 3;
+            document.getElementById('pwm-duty-cycle').value = 60;
+            document.getElementById('pwm-duty-value').textContent = '60%';
+            document.getElementById('camera-command').value = 'rpicam-still';
+            
+            // Save the reset configuration
+            await this.saveConfiguration();
+            
             this.updateStatus('Configuration reset to defaults', 'success');
             setTimeout(() => {
                 this.updateStatus('', '');
@@ -529,10 +631,9 @@ class App {
         }
     }
 
-    updateLEDBrightnessDisplay() {
-        const brightness = this.roiManager.getLEDBrightness();
-        document.getElementById('led-brightness').value = brightness;
-        document.getElementById('led-value').textContent = brightness;
+    updateSettingsDisplay() {
+        // This will be populated from loadConfiguration
+        // No need to do anything here as it's handled in loadConfiguration
     }
 }
 
