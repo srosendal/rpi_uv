@@ -78,6 +78,9 @@ class App {
         this.normalModeBtn.addEventListener('click', () => this.switchToNormalMode());
         this.settingsModeBtn.addEventListener('click', () => this.switchToSettingsMode());
         
+        // Exit button
+        document.getElementById('exit-btn').addEventListener('click', () => this.handleExit());
+        
         // ROI selection buttons
         document.querySelectorAll('.roi-select-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -681,6 +684,48 @@ class App {
     updateSettingsDisplay() {
         // This will be populated from loadConfiguration
         // No need to do anything here as it's handled in loadConfiguration
+    }
+
+    async handleExit() {
+        // Show confirmation dialog
+        if (!confirm('Are you sure you want to exit the application? This will safely shut down the server and clean up all resources.')) {
+            return;
+        }
+        
+        try {
+            // Update status
+            this.updateStatus('Shutting down safely...', 'processing');
+            
+            // Call shutdown endpoint
+            const response = await fetch(`${this.apiBaseUrl}/api/shutdown`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.updateStatus('Server shut down successfully. You can close this window.', 'success');
+                
+                // Optionally, close the window after a delay
+                setTimeout(() => {
+                    window.close();
+                }, 2000);
+            } else {
+                throw new Error(data.error || 'Shutdown failed');
+            }
+            
+        } catch (error) {
+            console.error('Error during shutdown:', error);
+            // Even if the request fails, the server might be shutting down
+            this.updateStatus('Shutting down... You can close this window.', 'success');
+            
+            setTimeout(() => {
+                window.close();
+            }, 2000);
+        }
     }
 }
 
