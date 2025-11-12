@@ -169,12 +169,35 @@ main() {
     print_success "  Installation Complete!"
     print_success "==============================================="
     
-    # Clean up any existing server on port 5000
+    # Clean up any existing processes (same as start_kiosk.sh)
+    print_info "Cleaning up any existing processes..."
+    
+    # Kill processes on port 5000
     if command -v lsof &> /dev/null && lsof -ti:5000 > /dev/null 2>&1; then
-        print_info "Cleaning up existing server on port 5000..."
-        lsof -ti:5000 | xargs kill -9 2>/dev/null
-        sleep 2
+        print_info "Killing processes on port 5000..."
+        lsof -ti:5000 | xargs kill -9 2>/dev/null || true
     fi
+    
+    # Kill server.py processes
+    if pgrep -f "server.py" > /dev/null 2>&1; then
+        print_info "Killing server.py processes..."
+        pkill -9 -f "server.py" 2>/dev/null || true
+    fi
+    
+    # Kill chromium processes
+    if pgrep -f "chromium" > /dev/null 2>&1; then
+        print_info "Killing chromium processes..."
+        pkill -9 chromium 2>/dev/null || true
+    fi
+    
+    # Kill rpicam processes
+    if pgrep -f "rpicam" > /dev/null 2>&1; then
+        print_info "Killing rpicam processes..."
+        pkill -9 rpicam-vid 2>/dev/null || true
+        pkill -9 rpicam-still 2>/dev/null || true
+    fi
+    
+    sleep 2
     
     print_info "Starting kiosk mode in 3 seconds..."
     sleep 3
