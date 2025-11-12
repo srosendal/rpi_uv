@@ -8,23 +8,36 @@ cd "$SCRIPT_DIR"
 # Kill any existing processes
 echo "Cleaning up existing processes..."
 
-# Kill any existing server on port 5000
-if lsof -ti:5000 > /dev/null 2>&1; then
-    echo "  Killing existing server on port 5000..."
-    lsof -ti:5000 | xargs kill -9 2>/dev/null
-    sleep 1
-fi
+# Kill any existing server on port 5000 (try multiple times)
+echo "  Killing existing server on port 5000..."
+lsof -ti:5000 | xargs kill -9 2>/dev/null || true
+sleep 1
+# Second attempt to ensure cleanup
+lsof -ti:5000 | xargs kill -9 2>/dev/null || true
 
-# Kill any stray Python server processes
-if pgrep -f "server.py" > /dev/null 2>&1; then
-    echo "  Killing stray server.py processes..."
-    pkill -9 -f "server.py" 2>/dev/null
-    sleep 1
-fi
+# Kill any stray Python server processes (multiple passes)
+echo "  Killing stray server.py processes..."
+pkill -9 -f "server.py" 2>/dev/null || true
+sleep 1
+# Second pass to catch any lingering processes
+pkill -9 -f "server.py" 2>/dev/null || true
 
-# Kill any rpicam processes to free camera
-pkill -9 rpicam-vid 2>/dev/null
-pkill -9 rpicam-still 2>/dev/null
+# Kill any stray Chromium browser processes (multiple passes)
+echo "  Killing stray chromium processes..."
+pkill -9 -f "chromium" 2>/dev/null || true
+pkill -9 chromium-browser 2>/dev/null || true
+sleep 1
+# Second pass to ensure cleanup
+pkill -9 -f "chromium" 2>/dev/null || true
+pkill -9 chromium-browser 2>/dev/null || true
+
+# Kill any rpicam processes to free camera (multiple attempts)
+pkill -9 rpicam-vid 2>/dev/null || true
+pkill -9 rpicam-still 2>/dev/null || true
+sleep 1
+# Second pass to ensure camera is freed
+pkill -9 rpicam-vid 2>/dev/null || true
+pkill -9 rpicam-still 2>/dev/null || true
 
 echo "Cleanup complete!"
 sleep 1
