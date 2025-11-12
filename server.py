@@ -22,7 +22,8 @@ try:
     GPIO_AVAILABLE = True
 except ImportError:
     GPIO_AVAILABLE = False
-    print("Warning: RPi.GPIO not available - PWM control disabled")
+    logger = logging.getLogger('RPiAnalyzer')
+    logger.warning("RPi.GPIO not available - PWM control disabled. This is normal if not running on a Raspberry Pi.")
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
@@ -82,9 +83,9 @@ pwm_instance = None
 def load_config():
     """Load configuration from config.json"""
     default_config = {
-        "num_photos": 3,
-        "startup_delay": 3.5,
-        "capture_delay": 2.0,
+        "num_photos": 2,
+        "startup_delay": 1.0,
+        "capture_delay": 1.0,
         "save_location": "photos",
         "pwm_duty_cycle": 60,
         "camera_command": "rpicam-still",
@@ -693,7 +694,9 @@ def analyze_sequence():
 
 @app.route('/api/save-to-usb', methods=['POST'])
 def save_to_usb():
-    """Save captured photos to USB"""
+    """Save captured photos to USB with fallback to local directory"""
+    import shutil
+    
     data = request.get_json()
     
     if not data or 'folder' not in data:
@@ -706,22 +709,70 @@ def save_to_usb():
     if not folder_path.exists():
         return jsonify({'success': False, 'error': 'Folder not found'}), 404
     
+    # Try USB first
     try:
         usb_drives = find_usb_drives()
         
-        if not usb_drives:
-            return jsonify({'success': False, 'message': 'No USB drive found'}), 404
-        
-        usb_path = Path(usb_drives[0])
-        save_dir = usb_path / 'test_strip_images' / folder
+        if usb_drives:
+            usb_path = Path(usb_drives[0])
+            save_dir = usb_path / 'test_strip_images' / folder
+            
+            try:
+                save_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(f"Saving to USB: {save_dir}")
+                
+                saved_files = []
+                
+                # Copy all photos
+                for photo in folder_path.glob('*.jpg'):
+                    dest = save_dir / photo.name
+                    shutil.copy2(photo, dest)
+                    saved_files.append(photo.name)
+                    logger.info(f"Copied: {photo.name}")
+                
+                # Save results JSON
+                if results:
+                    json_filename = f"{folder}_results.json"
+                    json_path = save_dir / json_filename
+                    with open(json_path, 'w') as f:
+                        json.dump({
+                            'folder': folder,
+                            'timestamp': datetime.now().isoformat(),
+                            'results': results
+                        }, f, indent=2)
+                    saved_files.append(json_filename)
+                    logger.info(f"Saved results JSON")
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Saved {len(saved_files)} files to USB',
+                    'saved_path': str(save_dir),
+                    'files': saved_files,
+                    'location': 'usb'
+                })
+                
+            except PermissionError as e:
+                logger.warning(f"USB permission denied: {e}. Falling back to local directory.")
+            except Exception as e:
+                logger.warning(f"USB save failed: {e}. Falling back to local directory.")
+        else:
+            logger.info("No USB drive found. Using local backup directory.")
+    
+    except Exception as e:
+        logger.warning(f"Error detecting USB: {e}. Falling back to local directory.")
+    
+    # Fallback to local backup directory
+    try:
+        home_dir = Path.home()
+        backup_base = home_dir / 'rpi_uv_photos_backup'
+        save_dir = backup_base / folder
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Saving to USB: {save_dir}")
+        logger.info(f"Saving to local backup: {save_dir}")
         
-        # Copy all photos
-        import shutil
         saved_files = []
         
+        # Copy all photos
         for photo in folder_path.glob('*.jpg'):
             dest = save_dir / photo.name
             shutil.copy2(photo, dest)
@@ -743,14 +794,15 @@ def save_to_usb():
         
         return jsonify({
             'success': True,
-            'message': f'Saved {len(saved_files)} files',
+            'message': f'Saved {len(saved_files)} files to local backup (USB not available)',
             'saved_path': str(save_dir),
-            'files': saved_files
+            'files': saved_files,
+            'location': 'local_backup'
         })
         
     except Exception as e:
-        logger.error(f"USB save failed: {e}", exc_info=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Backup save failed: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': f'Failed to save files: {str(e)}'}), 500
 
 
 @app.route('/api/usb/status', methods=['GET'])
