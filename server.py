@@ -16,6 +16,14 @@ from flask_cors import CORS
 import base64
 from hsv_analyzer import HSVAnalyzer
 
+# Try to import RPi.GPIO for PWM control
+try:
+    import RPi.GPIO as GPIO
+    GPIO_AVAILABLE = True
+except ImportError:
+    GPIO_AVAILABLE = False
+    print("Warning: RPi.GPIO not available - PWM control disabled")
+
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
@@ -62,6 +70,117 @@ streaming_active = False
 capture_in_progress = False
 mjpeg_process = None
 
+# Configuration file path
+CONFIG_FILE = Path('config.json')
+
+# PWM configuration
+PWM_GPIO_PIN = 12  # GPIO12 (PWM0)
+PWM_FREQUENCY = 1000  # 1 kHz
+pwm_instance = None
+
+
+def load_config():
+    """Load configuration from config.json"""
+    default_config = {
+        "num_photos": 3,
+        "pwm_duty_cycle": 60,
+        "camera_command": "rpicam-still",
+        "rois": [
+            {"id": 1, "x": 117, "y": 89, "width": 141, "height": 19},
+            {"id": 2, "x": 117, "y": 136, "width": 141, "height": 19},
+            {"id": 3, "x": 117, "y": 183, "width": 141, "height": 19},
+            {"id": 4, "x": 117, "y": 230, "width": 141, "height": 19}
+        ]
+    }
+    
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                # Merge with defaults to ensure all keys exist
+                for key, value in default_config.items():
+                    if key not in config:
+                        config[key] = value
+                return config
+        else:
+            # Create default config file
+            save_config(default_config)
+            return default_config
+    except Exception as e:
+        logger.error(f"Error loading config: {e}")
+        return default_config
+
+
+def save_config(config):
+    """Save configuration to config.json"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        logger.info("Configuration saved")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving config: {e}")
+        return False
+
+
+def init_pwm(duty_cycle=60):
+    """Initialize PWM on GPIO12"""
+    global pwm_instance
+    
+    if not GPIO_AVAILABLE:
+        logger.warning("GPIO not available, skipping PWM initialization")
+        return False
+    
+    try:
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(PWM_GPIO_PIN, GPIO.OUT)
+        pwm_instance = GPIO.PWM(PWM_GPIO_PIN, PWM_FREQUENCY)
+        pwm_instance.start(duty_cycle)
+        logger.info(f"PWM initialized on GPIO{PWM_GPIO_PIN} at {duty_cycle}% duty cycle")
+        return True
+    except Exception as e:
+        logger.error(f"Error initializing PWM: {e}")
+        return False
+
+
+def set_pwm_duty_cycle(duty_cycle):
+    """Set PWM duty cycle (0-100%)"""
+    global pwm_instance
+    
+    if not GPIO_AVAILABLE or pwm_instance is None:
+        logger.warning("PWM not available")
+        return False
+    
+    try:
+        duty_cycle = max(0, min(100, duty_cycle))  # Clamp to 0-100
+        pwm_instance.ChangeDutyCycle(duty_cycle)
+        logger.info(f"PWM duty cycle set to {duty_cycle}%")
+        return True
+    except Exception as e:
+        logger.error(f"Error setting PWM duty cycle: {e}")
+        return False
+
+
+def cleanup_pwm():
+    """Cleanup GPIO on exit"""
+    global pwm_instance
+    
+    if GPIO_AVAILABLE and pwm_instance is not None:
+        try:
+            pwm_instance.stop()
+            GPIO.cleanup()
+            logger.info("PWM cleaned up")
+        except Exception as e:
+            logger.error(f"Error cleaning up PWM: {e}")
+
+
+# Load configuration at startup
+app_config = load_config()
+
+# Initialize PWM with configured duty cycle
+if GPIO_AVAILABLE:
+    init_pwm(app_config.get('pwm_duty_cycle', 60))
+
 
 def stream_capture(output_path, timeout_ms=500):
     """
@@ -92,7 +211,7 @@ def stream_capture(output_path, timeout_ms=500):
         return False
 
 
-def analysis_capture(output_path, timeout_ms=2000):
+def analysis_capture(output_path, timeout_ms=2000, camera_command=None):
     """
     High quality camera capture for analysis - full native resolution
     Returns True if successful, False otherwise
@@ -100,8 +219,13 @@ def analysis_capture(output_path, timeout_ms=2000):
     try:
         logger.info(f"Capturing full resolution to: {output_path}")
         
-        cmd = [
-            'rpicam-still',
+        # Use configured camera command if not provided
+        if camera_command is None:
+            camera_command = app_config.get('camera_command', 'rpicam-still')
+        
+        # Build command - split the camera_command in case it has arguments
+        cmd_parts = camera_command.split()
+        cmd = cmd_parts + [
             '-o', str(output_path),
             # No width/height - use native resolution
             '--timeout', str(timeout_ms),
@@ -387,10 +511,11 @@ def capture_sequence():
 @app.route('/api/capture-sequence-stream')
 def capture_sequence_stream():
     """
-    Capture 3 photos in sequence with real-time progress updates via SSE
+    Capture photos in sequence with real-time progress updates via SSE
+    Number of photos is configurable via config.json
     """
     def generate():
-        global streaming_active, capture_in_progress
+        global streaming_active, capture_in_progress, app_config
         
         if capture_in_progress:
             yield f'data: {json.dumps({"status": "error", "message": "Capture already in progress"})}\n\n'
@@ -401,8 +526,12 @@ def capture_sequence_stream():
         capture_in_progress = True
         
         try:
+            # Get number of photos from config
+            num_photos = app_config.get('num_photos', 3)
+            camera_command = app_config.get('camera_command', 'rpicam-still')
+            
             yield f'data: {json.dumps({"status": "starting", "message": "Starting capture sequence..."})}\n\n'
-            logger.info("=== Starting capture sequence (SSE) ===")
+            logger.info(f"=== Starting capture sequence ({num_photos} photos) ===")
             
             yield f'data: {json.dumps({"status": "preparing", "message": "Stopping stream and preparing camera..."})}\n\n'
             
@@ -428,18 +557,18 @@ def capture_sequence_stream():
             
             photos = []
             
-            # Capture 3 photos with progress updates
-            for i in range(1, 4):
-                yield f'data: {json.dumps({"status": "capturing", "photo": i, "total": 3, "message": f"Capturing photo {i}/3..."})}\n\n'
-                logger.info(f"Capturing photo {i}/3")
+            # Capture photos with progress updates
+            for i in range(1, num_photos + 1):
+                yield f'data: {json.dumps({"status": "capturing", "photo": i, "total": num_photos, "message": f"Capturing photo {i}/{num_photos}..."})}\n\n'
+                logger.info(f"Capturing photo {i}/{num_photos}")
                 
                 photo_name = f"{timestamp}_{i:03d}.jpg"
                 photo_path = folder_path / photo_name
                 
-                # High quality capture at native resolution
-                if not analysis_capture(photo_path, timeout_ms=2000):
-                    logger.error(f"Failed to capture photo {i}/3")
-                    yield f'data: {json.dumps({"status": "error", "message": f"Failed to capture photo {i}/3"})}\n\n'
+                # High quality capture at native resolution with configured command
+                if not analysis_capture(photo_path, timeout_ms=2000, camera_command=camera_command):
+                    logger.error(f"Failed to capture photo {i}/{num_photos}")
+                    yield f'data: {json.dumps({"status": "error", "message": f"Failed to capture photo {i}/{num_photos}"})}\n\n'
                     capture_in_progress = False
                     streaming_active = True
                     return
@@ -448,10 +577,10 @@ def capture_sequence_stream():
                 logger.info(f"Captured: {photo_name}")
                 
                 # Send success with image URL
-                yield f'data: {json.dumps({"status": "captured", "photo": i, "total": 3, "filename": photo_name, "folder": timestamp, "message": f"Captured photo {i}/3"})}\n\n'
+                yield f'data: {json.dumps({"status": "captured", "photo": i, "total": num_photos, "filename": photo_name, "folder": timestamp, "message": f"Captured photo {i}/{num_photos}"})}\n\n'
                 
                 # Delay before next capture (except after last)
-                if i < 3:
+                if i < num_photos:
                     time.sleep(2.0)
             
             logger.info(f"=== Capture sequence complete: {len(photos)} photos ===")
@@ -648,6 +777,73 @@ def get_image(folder, filename):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Get current configuration"""
+    global app_config
+    return jsonify({
+        'success': True,
+        'config': app_config
+    })
+
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    """Update configuration"""
+    global app_config
+    
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+    
+    try:
+        # Update config
+        for key, value in data.items():
+            if key in ['num_photos', 'pwm_duty_cycle', 'camera_command', 'rois']:
+                app_config[key] = value
+        
+        # Save to file
+        if save_config(app_config):
+            # Update PWM if duty cycle changed
+            if 'pwm_duty_cycle' in data:
+                set_pwm_duty_cycle(data['pwm_duty_cycle'])
+            
+            return jsonify({
+                'success': True,
+                'message': 'Configuration updated',
+                'config': app_config
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save config'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating config: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pwm/set', methods=['POST'])
+def set_pwm():
+    """Set PWM duty cycle"""
+    data = request.get_json()
+    
+    if not data or 'duty_cycle' not in data:
+        return jsonify({'success': False, 'error': 'Missing duty_cycle'}), 400
+    
+    duty_cycle = data['duty_cycle']
+    
+    if set_pwm_duty_cycle(duty_cycle):
+        # Update config
+        app_config['pwm_duty_cycle'] = duty_cycle
+        save_config(app_config)
+        
+        return jsonify({
+            'success': True,
+            'duty_cycle': duty_cycle
+        })
+    else:
+        return jsonify({'success': False, 'error': 'Failed to set PWM'}), 500
+
+
 @app.route('/api/system/info', methods=['GET'])
 def system_info():
     """Get system information"""
@@ -655,19 +851,29 @@ def system_info():
     return jsonify({
         'platform': platform.system(),
         'camera_available': True,
-        'version': '1.0.2'
+        'gpio_available': GPIO_AVAILABLE,
+        'version': '1.0.3'
     })
 
 
 if __name__ == '__main__':
     logger.info("=" * 60)
-    logger.info("RPi Test Strip Analyzer - Server Starting (v1.0.2)")
+    logger.info("RPi Test Strip Analyzer - Server Starting (v1.0.3)")
     logger.info("=" * 60)
     logger.info(f"Stream resolution: {STREAM_WIDTH}x{STREAM_HEIGHT}")
     logger.info(f"Capture resolution: Native (full camera resolution)")
     logger.info(f"Photos directory: {PHOTOS_DIR.absolute()}")
     logger.info(f"Log directory: {LOG_DIR.absolute()}")
+    logger.info(f"Config file: {CONFIG_FILE.absolute()}")
+    logger.info(f"Number of photos per capture: {app_config.get('num_photos', 3)}")
+    logger.info(f"PWM duty cycle: {app_config.get('pwm_duty_cycle', 60)}%")
+    logger.info(f"Camera command: {app_config.get('camera_command', 'rpicam-still')}")
+    logger.info(f"GPIO available: {GPIO_AVAILABLE}")
     logger.info(f"Server: http://0.0.0.0:5000")
     logger.info("=" * 60)
     
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    finally:
+        # Cleanup on exit
+        cleanup_pwm()
