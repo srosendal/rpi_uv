@@ -1,5 +1,8 @@
 {
   "num_photos": 3,
+  "startup_delay": 3.5,
+  "capture_delay": 2.0,
+  "save_location": "photos",
   "pwm_duty_cycle": 60,
   "camera_command": "rpicam-still",
   "rois": [
