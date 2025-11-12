@@ -89,6 +89,16 @@ Access at: `http://localhost:5000` (on RPi) or `http://raspberrypi.local:5000` (
 
 ### Exiting the Application
 
+**Option 1: Using the Exit Button (Recommended)**
+- Click the **"Exit"** button in the top-right corner of the interface
+- Confirm the shutdown when prompted
+- The system will safely:
+  - Set PWM duty cycle to 0%
+  - Stop all camera processes
+  - Clean up GPIO resources
+  - Shut down the server
+
+**Option 2: Keyboard Shortcuts**
 - **To exit kiosk mode:** Press `Ctrl+W`
 - **To stop the server:** Press `Ctrl+C` in the terminal
 
