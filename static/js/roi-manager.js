@@ -8,7 +8,6 @@ class ROIManager {
         this.rois = this.getDefaultROIs();
         this.selectedROI = 1;
         this.stepSize = 5;
-        this.ledBrightness = 128;
         this.adjustmentMode = 'move'; // 'move', 'increase', or 'decrease'
     }
 
@@ -209,7 +208,6 @@ class ROIManager {
     getConfiguration() {
         return {
             rois: this.rois.map(roi => ({...roi})),
-            led_brightness: this.ledBrightness,
             timestamp: new Date().toISOString()
         };
     }
@@ -223,10 +221,6 @@ class ROIManager {
             this.rois = config.rois.map(roi => ({...roi}));
             this.updateAllROIVisuals();
         }
-        
-        if (config.led_brightness !== undefined) {
-            this.ledBrightness = config.led_brightness;
-        }
     }
 
     /**
@@ -234,7 +228,6 @@ class ROIManager {
      */
     resetToDefault() {
         this.rois = this.getDefaultROIs();
-        this.ledBrightness = 128;
         this.selectedROI = 1;
         this.updateAllROIVisuals();
     }
@@ -281,22 +274,6 @@ class ROIManager {
             console.error('Error loading configuration:', error);
         }
         return false;
-    }
-
-    /**
-     * Set LED brightness
-     * @param {number} value - Brightness value (0-255)
-     */
-    setLEDBrightness(value) {
-        this.ledBrightness = Math.max(0, Math.min(255, value));
-    }
-
-    /**
-     * Get LED brightness
-     * @returns {number} - Current brightness value
-     */
-    getLEDBrightness() {
-        return this.ledBrightness;
     }
 }
 
