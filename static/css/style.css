@@ -274,6 +274,83 @@ header h1 {
 
 .settings-group label {
     display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #333;
+    font-size: 14px;
+}
+
+.settings-group input[type="number"] {
+    width: 80px;
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    text-align: center;
+}
+
+.settings-group input[type="number"]:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.settings-group input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+}
+
+.settings-group input[type="text"]:focus {
+    outline: none;
+    border-color: #007bff;
+    background-color: #fff;
+}
+
+.settings-group input[type="range"] {
+    width: 100%;
+    margin: 10px 0;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 8px;
+    background: #ddd;
+    border-radius: 4px;
+    outline: none;
+}
+
+.settings-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #007bff;
+    cursor: pointer;
+    border-radius: 50%;
+}
+
+.settings-group input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #007bff;
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+}
+
+#pwm-duty-value {
+    display: inline-block;
+    min-width: 50px;
+    text-align: center;
+    font-weight: 600;
+    color: #007bff;
+    font-size: 16px;
+}
+
+.settings-group label {
+    display: block;
     color: #fff;
     margin-bottom: 10px;
     font-size: 14px;
@@ -482,4 +559,22 @@ footer {
 
 #control-panel::-webkit-scrollbar-thumb:hover {
     background: #0ea5e9;
+}
+
+/* Save Location Control */
+.save-location-control {
+    display: flex;
+    gap: 8px;
+    margin: 5px 0;
+}
+
+.save-location-control input[type="text"] {
+    flex: 1;
+    margin: 0;
+}
+
+.save-location-control button {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    margin: 0;
 }
